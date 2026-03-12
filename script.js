@@ -21,6 +21,24 @@ const modeConfig = {
   }
 };
 
+const knowledgeCards = [
+  {
+    keywords: ['black hole', 'black holes'],
+    answer:
+      'A black hole is a place in space where gravity is so strong that even light cannot escape. Most form when very massive stars collapse. Key parts are the event horizon (the boundary) and singularity (the extremely dense center).'
+  },
+  {
+    keywords: ['photosynthesis'],
+    answer:
+      'Photosynthesis is how plants make food using sunlight, water, and carbon dioxide. They create glucose (energy) and release oxygen as a by-product.'
+  },
+  {
+    keywords: ['ww2', 'world war 2', 'second world war'],
+    answer:
+      'World War II lasted from 1939 to 1945 and involved most of the world. It began after Germany invaded Poland and ended with Allied victory in Europe and the Pacific.'
+  }
+];
+
 const chatLog = document.getElementById('chat-log');
 const form = document.getElementById('chat-form');
 const input = document.getElementById('user-input');
@@ -31,10 +49,14 @@ const installBtn = document.getElementById('install-btn');
 const installHelp = document.getElementById('install-help');
 const promptChips = [...document.querySelectorAll('.prompt-chip')];
 const newChatBtn = document.getElementById('new-chat-btn');
+const apiKeyInput = document.getElementById('api-key-input');
+const saveKeyBtn = document.getElementById('save-key-btn');
+const apiStatus = document.getElementById('api-status');
 
 let currentMode = 'default';
 let deferredInstallPrompt;
 const memory = { preferences: [] };
+let apiKey = localStorage.getItem('jackgpt_openai_api_key') || '';
 
 function escapeHtml(text) {
   return text
@@ -45,6 +67,20 @@ function escapeHtml(text) {
     .replace(/'/g, '&#039;');
 }
 
+function setApiStatus(text) {
+  apiStatus.textContent = text;
+}
+
+function updateApiUI() {
+  if (apiKey) {
+    setApiStatus('OpenAI key saved. JackGPT will use ChatGPT responses.');
+    apiKeyInput.value = '••••••••••••••••';
+  } else {
+    setApiStatus('No key saved. JackGPT will use local fallback replies.');
+    apiKeyInput.value = '';
+  }
+}
+
 function addMessage(text, role = 'assistant') {
   const el = document.createElement('article');
   el.className = `message ${role}`;
@@ -53,38 +89,88 @@ function addMessage(text, role = 'assistant') {
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
-function buildReply(rawText) {
-  const text = rawText.toLowerCase();
+function parseArithmetic(text) {
+  const trimmed = text.trim();
+  const safe = /^[0-9+\-*/().\s]+$/.test(trimmed);
+  if (!safe || !/[+\-*/]/.test(trimmed)) return null;
 
-  if (currentMode === 'code') {
-    return '💻 Code Mode: Share your code + error and I’ll debug step-by-step. I can help with Python, JavaScript, HTML, and architecture decisions.';
+  try {
+    const result = Function(`"use strict"; return (${trimmed});`)();
+    if (!Number.isFinite(result)) return null;
+    return result;
+  } catch {
+    return null;
   }
-
-  if (currentMode === 'study') {
-    return '📘 Study Mode: I’ll explain clearly with definitions, examples, and a simple analogy. Tell me your level: kid, beginner, or expert.';
-  }
-
-  if (currentMode === 'creative') {
-    return '🎨 Creative Mode: Nice idea! I can turn this into a story, script, poem, world, or a polished concept pitch with characters and plot.';
-  }
-
-  if (currentMode === 'memory') {
-    memory.preferences.push(rawText);
-    return `🧠 Memory Mode: Saved your preference. I have ${memory.preferences.length} memory note(s) in this session.`;
-  }
-
-  if (text.includes('black hole')) {
-    return 'A black hole is where gravity is so strong that even light cannot escape. Imagine spacetime as a stretched sheet: a collapsed star makes a very deep dip, and nearby objects fall toward it.';
-  }
-
-  if (text.includes('email')) {
-    return 'I can draft that email. Tell me: recipient, purpose, tone, and any must-include points.';
-  }
-
-  return 'Great prompt. I can help with learning, coding, writing, productivity, and brainstorming. Pick a mode for more tailored responses.';
 }
 
-function sendMessage(text) {
+function defaultQuestionAnswer(text) {
+  const normalized = text.toLowerCase();
+  const mathResult = parseArithmetic(normalized.replace(/^what is\s+/i, '').replace(/\?$/, ''));
+  if (mathResult !== null) return `The answer is <strong>${mathResult}</strong>.`;
+
+  const found = knowledgeCards.find((card) => card.keywords.some((keyword) => normalized.includes(keyword)));
+  if (found) return found.answer;
+
+  return 'I can answer that. Add your OpenAI API key in the sidebar so JackGPT can use ChatGPT for a richer answer.';
+}
+
+function buildSystemPrompt() {
+  const modeHint = {
+    default: 'Give clear, helpful answers.',
+    memory: 'Use friendly personalization and remember preferences from the current chat.',
+    creative: 'Be imaginative, vivid, and creative.',
+    study: 'Teach step-by-step and include simple explanations.',
+    code: 'Focus on programming help, debugging, and concise code explanations.'
+  }[currentMode];
+
+  return `You are JackGPT, a friendly AI assistant. Always refer to yourself as JackGPT. ${modeHint}`;
+}
+
+async function getChatGPTReply(userText) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: buildSystemPrompt() },
+        ...memory.preferences.slice(-6).map((msg) => ({ role: 'user', content: msg })),
+        { role: 'user', content: userText }
+      ],
+      temperature: currentMode === 'creative' ? 0.9 : 0.4
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenAI request failed (${response.status}): ${text}`);
+  }
+
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content?.trim() || 'I could not generate a response.';
+}
+
+async function buildReply(rawText) {
+  if (currentMode === 'memory') {
+    memory.preferences.push(rawText);
+  }
+
+  if (apiKey) {
+    try {
+      const chatgptReply = await getChatGPTReply(rawText);
+      return escapeHtml(chatgptReply).replace(/\n/g, '<br>');
+    } catch (error) {
+      setApiStatus(`ChatGPT call failed. Using fallback replies. ${error.message}`);
+    }
+  }
+
+  return defaultQuestionAnswer(rawText);
+}
+
+async function sendMessage(text) {
   const clean = text.trim();
   if (!clean) return;
   addMessage(escapeHtml(clean), 'user');
@@ -96,10 +182,9 @@ function sendMessage(text) {
   chatLog.appendChild(typing);
   chatLog.scrollTop = chatLog.scrollHeight;
 
-  setTimeout(() => {
-    typing.remove();
-    addMessage(buildReply(clean), 'assistant');
-  }, 320);
+  const reply = await buildReply(clean);
+  typing.remove();
+  addMessage(reply, 'assistant');
 }
 
 modeButtons.forEach((btn) => {
@@ -115,22 +200,37 @@ modeButtons.forEach((btn) => {
   });
 });
 
-form.addEventListener('submit', (event) => {
+saveKeyBtn.addEventListener('click', () => {
+  const entered = apiKeyInput.value.trim();
+
+  if (!entered || entered.includes('•')) {
+    if (!apiKey) setApiStatus('Please paste a real OpenAI API key (starts with sk-).');
+    return;
+  }
+
+  apiKey = entered;
+  localStorage.setItem('jackgpt_openai_api_key', apiKey);
+  updateApiUI();
+  addMessage('OpenAI key saved. JackGPT will now answer using ChatGPT.');
+});
+
+form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  sendMessage(input.value);
+  await sendMessage(input.value);
   input.value = '';
   input.style.height = '46px';
 });
 
 promptChips.forEach((chip) => {
-  chip.addEventListener('click', () => {
-    sendMessage(chip.dataset.prompt);
+  chip.addEventListener('click', async () => {
+    await sendMessage(chip.dataset.prompt);
   });
 });
 
 newChatBtn.addEventListener('click', () => {
   chatLog.innerHTML = '';
-  addMessage('New chat started. Ask me anything — science, code, writing, or ideas!');
+  memory.preferences = [];
+  addMessage('New chat started. Ask me a question and I will answer as JackGPT.');
 });
 
 input.addEventListener('input', () => {
@@ -167,3 +267,5 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+updateApiUI();

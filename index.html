@@ -24,6 +24,14 @@
         <button class="history-item">Sci-fi story ideas</button>
       </nav>
 
+      <section class="api-card">
+        <div class="section-label">ChatGPT connection</div>
+        <label for="api-key-input" class="api-label">OpenAI API Key</label>
+        <input id="api-key-input" type="password" placeholder="sk-..." autocomplete="off" />
+        <button id="save-key-btn" class="install-btn" type="button">Save key</button>
+        <small id="api-status">No key saved. JackGPT will use local fallback replies.</small>
+      </section>
+
       <div class="spacer"></div>
 
       <section class="modes-card">
@@ -59,7 +67,7 @@
       <section class="chat-log" id="chat-log" aria-live="polite">
         <article class="message assistant">
           <div class="who">JackGPT</div>
-          <p>Hi! I’m JackGPT ✨ I can help with coding, writing, studying, brainstorming, and problem-solving. What do you want to do today?</p>
+          <p>Hi! I’m JackGPT ✨ Add your OpenAI API key in the sidebar and I’ll use ChatGPT to answer your questions.</p>
         </article>
       </section>
 
