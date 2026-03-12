@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JackGPT — AI Assistant</title>
+  <meta name="description" content="JackGPT is an installable AI assistant website for learning, coding, writing, and creativity." />
+  <meta name="theme-color" content="#0b0f19" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+  <link rel="apple-touch-icon" href="assets/icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="left-rail">
+      <button id="new-chat-btn" class="new-chat-btn">+ New chat</button>
+
+      <div class="section-label">Recent chats</div>
+      <nav class="chat-history" aria-label="Recent chats">
+        <button class="history-item active">Welcome to JackGPT</button>
+        <button class="history-item">Black holes explained simply</button>
+        <button class="history-item">Python debugging help</button>
+        <button class="history-item">Sci-fi story ideas</button>
+      </nav>
+
+      <div class="spacer"></div>
+
+      <section class="modes-card">
+        <div class="section-label">Assistant mode</div>
+        <div class="mode-buttons">
+          <button class="mode-btn active" data-mode="default">Default</button>
+          <button class="mode-btn" data-mode="memory">Memory</button>
+          <button class="mode-btn" data-mode="creative">Creative</button>
+          <button class="mode-btn" data-mode="study">Study</button>
+          <button class="mode-btn" data-mode="code">Code</button>
+        </div>
+      </section>
+
+      <section class="install-card">
+        <div class="section-label">Install JackGPT</div>
+        <p>Use JackGPT like a native app.</p>
+        <button id="install-btn" class="install-btn" hidden>Install app</button>
+        <small id="install-help">If button is hidden, use browser menu → Install app.</small>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div>
+          <h1>JackGPT</h1>
+          <p id="mode-description">Friendly, intelligent help for questions, learning, and creativity.</p>
+        </div>
+        <div class="topbar-right">
+          <span class="mode-pill" id="mode-title">Default</span>
+        </div>
+      </header>
+
+      <section class="chat-log" id="chat-log" aria-live="polite">
+        <article class="message assistant">
+          <div class="who">JackGPT</div>
+          <p>Hi! I’m JackGPT ✨ I can help with coding, writing, studying, brainstorming, and problem-solving. What do you want to do today?</p>
+        </article>
+      </section>
+
+      <section class="composer-wrap">
+        <div class="quick-prompts">
+          <button class="prompt-chip" data-prompt="Explain black holes to a beginner">Explain black holes</button>
+          <button class="prompt-chip" data-prompt="Write a short sci-fi story prompt">Write sci-fi prompt</button>
+          <button class="prompt-chip" data-prompt="Help debug this Python error">Debug Python</button>
+        </div>
+
+        <form id="chat-form" class="composer">
+          <label class="sr-only" for="user-input">Message JackGPT</label>
+          <textarea id="user-input" rows="1" placeholder="Message JackGPT..."></textarea>
+          <button type="submit" class="send-btn">Send</button>
+        </form>
+        <small class="disclaimer">JackGPT can make mistakes. Verify important information.</small>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
