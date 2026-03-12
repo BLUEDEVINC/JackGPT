@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JackGPT — Your AI Companion</title>
+  <meta name="description" content="JackGPT is an installable AI assistant web app for learning, coding, writing, and creativity." />
+  <meta name="theme-color" content="#09080f" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+  <link rel="apple-touch-icon" href="assets/icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="avatar" aria-hidden="true">🧠</div>
+        <div>
+          <h1>JackGPT</h1>
+          <p>Conversational AI Assistant</p>
+        </div>
+      </div>
+
+      <section class="mode-panel">
+        <h2>Modes</h2>
+        <div class="mode-buttons">
+          <button class="mode-btn active" data-mode="default">Default</button>
+          <button class="mode-btn" data-mode="memory">Memory</button>
+          <button class="mode-btn" data-mode="creative">Creative</button>
+          <button class="mode-btn" data-mode="study">Study</button>
+          <button class="mode-btn" data-mode="code">Code</button>
+        </div>
+      </section>
+
+      <section class="capability-panel">
+        <h2>Core Capabilities</h2>
+        <ul>
+          <li>Answer questions (science, history, tech, geography, math)</li>
+          <li>Write stories, scripts, poems, and concepts</li>
+          <li>Teach with step-by-step explanations</li>
+          <li>Write, debug, and explain code</li>
+          <li>Boost productivity (emails, plans, summaries)</li>
+          <li>Provide fun: jokes, trivia, worlds, and games</li>
+        </ul>
+      </section>
+
+      <section class="install-panel">
+        <h2>Install App</h2>
+        <p>Install JackGPT for a native-app experience on desktop or mobile.</p>
+        <button id="install-btn" class="install-btn" hidden>Install JackGPT</button>
+        <small id="install-help">If install is not shown, open browser menu and choose "Install app".</small>
+      </section>
+    </aside>
+
+    <main class="chat-area">
+      <header class="chat-header">
+        <h2 id="mode-title">Default Mode</h2>
+        <p id="mode-description">Friendly, intelligent help for questions, learning, and creativity.</p>
+      </header>
+
+      <section class="chat-log" id="chat-log" aria-live="polite">
+        <article class="message assistant">
+          <p>Hey! I’m <strong>JackGPT</strong> — your smart digital companion. Ask me anything, and I’ll help you learn, create, and solve problems quickly. ✨</p>
+        </article>
+      </section>
+
+      <form id="chat-form" class="chat-input-row">
+        <label class="sr-only" for="user-input">Type a message</label>
+        <textarea id="user-input" rows="2" placeholder="Try: Explain black holes, write a sci-fi story, or debug Python code..."></textarea>
+        <button type="submit">Send</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
