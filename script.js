@@ -36,16 +36,6 @@ const knowledgeCards = [
     keywords: ['ww2', 'world war 2', 'second world war'],
     answer:
       'World War II lasted from 1939 to 1945 and involved most of the world. It began after Germany invaded Poland and ended with Allied victory in Europe and the Pacific.'
-  },
-  {
-    keywords: ['python', 'javascript', 'html', 'css', 'bug', 'debug'],
-    answer:
-      'I can help debug this. Share: (1) code snippet, (2) exact error message, (3) expected output, and (4) what you already tried.'
-  },
-  {
-    keywords: ['email', 'write an email', 'draft email'],
-    answer:
-      'Sure — tell me recipient, purpose, tone (formal/casual), and key points. I will draft a clean version and a shorter alternative.'
   }
 ];
 
@@ -59,10 +49,14 @@ const installBtn = document.getElementById('install-btn');
 const installHelp = document.getElementById('install-help');
 const promptChips = [...document.querySelectorAll('.prompt-chip')];
 const newChatBtn = document.getElementById('new-chat-btn');
+const apiKeyInput = document.getElementById('api-key-input');
+const saveKeyBtn = document.getElementById('save-key-btn');
+const apiStatus = document.getElementById('api-status');
 
 let currentMode = 'default';
 let deferredInstallPrompt;
 const memory = { preferences: [] };
+let apiKey = localStorage.getItem('jackgpt_openai_api_key') || '';
 
 function escapeHtml(text) {
   return text
@@ -71,6 +65,20 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function setApiStatus(text) {
+  apiStatus.textContent = text;
+}
+
+function updateApiUI() {
+  if (apiKey) {
+    setApiStatus('OpenAI key saved. JackGPT will use ChatGPT responses.');
+    apiKeyInput.value = '••••••••••••••••';
+  } else {
+    setApiStatus('No key saved. JackGPT will use local fallback replies.');
+    apiKeyInput.value = '';
+  }
 }
 
 function addMessage(text, role = 'assistant') {
@@ -95,59 +103,74 @@ function parseArithmetic(text) {
   }
 }
 
-function answerFromKnowledge(text) {
-  const found = knowledgeCards.find((card) => card.keywords.some((keyword) => text.includes(keyword)));
-  return found ? found.answer : null;
+function defaultQuestionAnswer(text) {
+  const normalized = text.toLowerCase();
+  const mathResult = parseArithmetic(normalized.replace(/^what is\s+/i, '').replace(/\?$/, ''));
+  if (mathResult !== null) return `The answer is <strong>${mathResult}</strong>.`;
+
+  const found = knowledgeCards.find((card) => card.keywords.some((keyword) => normalized.includes(keyword)));
+  if (found) return found.answer;
+
+  return 'I can answer that. Add your OpenAI API key in the sidebar so JackGPT can use ChatGPT for a richer answer.';
 }
 
-function defaultQuestionAnswer(text) {
-  const mathResult = parseArithmetic(text.replace(/^what is\s+/i, '').replace(/\?$/, ''));
-  if (mathResult !== null) {
-    return `The answer is <strong>${mathResult}</strong>.`;
+function buildSystemPrompt() {
+  const modeHint = {
+    default: 'Give clear, helpful answers.',
+    memory: 'Use friendly personalization and remember preferences from the current chat.',
+    creative: 'Be imaginative, vivid, and creative.',
+    study: 'Teach step-by-step and include simple explanations.',
+    code: 'Focus on programming help, debugging, and concise code explanations.'
+  }[currentMode];
+
+  return `You are JackGPT, a friendly AI assistant. Always refer to yourself as JackGPT. ${modeHint}`;
+}
+
+async function getChatGPTReply(userText) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: buildSystemPrompt() },
+        ...memory.preferences.slice(-6).map((msg) => ({ role: 'user', content: msg })),
+        { role: 'user', content: userText }
+      ],
+      temperature: currentMode === 'creative' ? 0.9 : 0.4
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenAI request failed (${response.status}): ${text}`);
   }
 
-  const cardAnswer = answerFromKnowledge(text);
-  if (cardAnswer) return cardAnswer;
-
-  return 'I can answer that. Give me a bit more detail so I can be precise — for example your level (kid, beginner, expert), desired format (short or step-by-step), and the exact topic.';
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content?.trim() || 'I could not generate a response.';
 }
 
-function buildReply(rawText) {
-  const text = rawText.toLowerCase();
-
+async function buildReply(rawText) {
   if (currentMode === 'memory') {
     memory.preferences.push(rawText);
   }
 
-  if (currentMode === 'code') {
-    return '💻 <strong>Code Mode:</strong> I can help immediately. Paste your code and error, and I will explain the bug, provide a fixed version, and list why the fix works.';
+  if (apiKey) {
+    try {
+      const chatgptReply = await getChatGPTReply(rawText);
+      return escapeHtml(chatgptReply).replace(/\n/g, '<br>');
+    } catch (error) {
+      setApiStatus(`ChatGPT call failed. Using fallback replies. ${error.message}`);
+    }
   }
 
-  if (currentMode === 'study') {
-    const base = defaultQuestionAnswer(text);
-    return `📘 <strong>Study Mode</strong><br><br>${base}<br><br><strong>Quick recap:</strong> I can also break this into simple steps if you want.`;
-  }
-
-  if (currentMode === 'creative') {
-    return '🎨 <strong>Creative Mode:</strong> Great prompt! I can turn this into a story, script, poem, movie pitch, or full fictional world. Tell me your preferred style and length.';
-  }
-
-  if (text.includes('hello') || text.includes('hi ') || text === 'hi') {
-    return 'Hey! 👋 Ask me any question — science, history, coding, writing, math, or productivity.';
-  }
-
-  if (text.includes('?') || text.startsWith('what') || text.startsWith('how') || text.startsWith('why')) {
-    return defaultQuestionAnswer(text);
-  }
-
-  if (text.includes('joke')) {
-    return 'Why did the developer go broke? Because he used up all his cache. 😄';
-  }
-
-  return 'Nice prompt. If you ask a direct question, I will answer it clearly. You can also switch to Study or Code mode for deeper help.';
+  return defaultQuestionAnswer(rawText);
 }
 
-function sendMessage(text) {
+async function sendMessage(text) {
   const clean = text.trim();
   if (!clean) return;
   addMessage(escapeHtml(clean), 'user');
@@ -159,10 +182,9 @@ function sendMessage(text) {
   chatLog.appendChild(typing);
   chatLog.scrollTop = chatLog.scrollHeight;
 
-  setTimeout(() => {
-    typing.remove();
-    addMessage(buildReply(clean), 'assistant');
-  }, 280);
+  const reply = await buildReply(clean);
+  typing.remove();
+  addMessage(reply, 'assistant');
 }
 
 modeButtons.forEach((btn) => {
@@ -178,22 +200,37 @@ modeButtons.forEach((btn) => {
   });
 });
 
-form.addEventListener('submit', (event) => {
+saveKeyBtn.addEventListener('click', () => {
+  const entered = apiKeyInput.value.trim();
+
+  if (!entered || entered.includes('•')) {
+    if (!apiKey) setApiStatus('Please paste a real OpenAI API key (starts with sk-).');
+    return;
+  }
+
+  apiKey = entered;
+  localStorage.setItem('jackgpt_openai_api_key', apiKey);
+  updateApiUI();
+  addMessage('OpenAI key saved. JackGPT will now answer using ChatGPT.');
+});
+
+form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  sendMessage(input.value);
+  await sendMessage(input.value);
   input.value = '';
   input.style.height = '46px';
 });
 
 promptChips.forEach((chip) => {
-  chip.addEventListener('click', () => {
-    sendMessage(chip.dataset.prompt);
+  chip.addEventListener('click', async () => {
+    await sendMessage(chip.dataset.prompt);
   });
 });
 
 newChatBtn.addEventListener('click', () => {
   chatLog.innerHTML = '';
-  addMessage('New chat started. Ask me a question and I will answer directly.');
+  memory.preferences = [];
+  addMessage('New chat started. Ask me a question and I will answer as JackGPT.');
 });
 
 input.addEventListener('input', () => {
@@ -230,3 +267,5 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+updateApiUI();
