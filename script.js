@@ -127,18 +127,28 @@ function buildSystemPrompt() {
 }
 
 async function getChatGPTReply(userText) {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: buildSystemPrompt() },
-        ...memory.preferences.slice(-6).map((msg) => ({ role: 'user', content: msg })),
-        { role: 'user', content: userText }
+      model: 'gpt-5-nano',
+      store: true,
+      input: [
+        {
+          role: 'system',
+          content: [{ type: 'input_text', text: buildSystemPrompt() }]
+        },
+        ...memory.preferences.slice(-6).map((msg) => ({
+          role: 'user',
+          content: [{ type: 'input_text', text: msg }]
+        })),
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: userText }]
+        }
       ],
       temperature: currentMode === 'creative' ? 0.9 : 0.4
     })
@@ -150,7 +160,7 @@ async function getChatGPTReply(userText) {
   }
 
   const data = await response.json();
-  return data?.choices?.[0]?.message?.content?.trim() || 'I could not generate a response.';
+  return data?.output_text?.trim() || 'I could not generate a response.';
 }
 
 async function buildReply(rawText) {
