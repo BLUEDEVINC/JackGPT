@@ -16,7 +16,7 @@ JackGPT is an installable AI assistant website inspired by modern conversational
   - Code
 - ChatGPT-powered answers (optional):
   - Add your OpenAI API key in the sidebar
-  - JackGPT calls the OpenAI Chat Completions API
+  - JackGPT calls the OpenAI Responses API
   - If no key is set, JackGPT falls back to local demo replies
 - Installable web app support (PWA):
   - `manifest.webmanifest`
