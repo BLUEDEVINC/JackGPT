@@ -1,47 +1,130 @@
-# JackGPT
+# ChatGPT Clone
 
-JackGPT is an installable AI assistant website inspired by modern conversational interfaces like ChatGPT.
+A production-minded full-stack AI chat web app inspired by ChatGPT, with authentication, conversation history, streaming responses, markdown rendering, code highlighting, sharing, and export tools.
 
-## What this version includes
+## Project tree
 
-- ChatGPT-style website layout:
-  - Left rail with **New chat** and recent conversations
-  - Main chat panel with assistant/user message blocks
-  - Bottom composer with quick prompt chips
-- JackGPT modes:
-  - Default
-  - Memory
-  - Creative
-  - Study
-  - Code
-- ChatGPT-powered answers (optional):
-  - Add your OpenAI API key in the sidebar
-  - JackGPT calls the OpenAI Responses API
-  - If no key is set, JackGPT falls back to local demo replies
-- Installable web app support (PWA):
-  - `manifest.webmanifest`
-  - `sw.js` service worker
-  - in-app install button using `beforeinstallprompt`
-
-## Run locally
-
-```bash
-python3 -m http.server 8000
+```text
+.
+├── backend
+│   ├── package.json
+│   └── src
+│       ├── config.js
+│       ├── db.js
+│       ├── server.js
+│       ├── controllers
+│       │   ├── authController.js
+│       │   └── conversationController.js
+│       ├── middleware
+│       │   └── auth.js
+│       ├── models
+│       │   ├── Conversation.js
+│       │   ├── Message.js
+│       │   └── User.js
+│       ├── routes
+│       │   ├── authRoutes.js
+│       │   └── conversationRoutes.js
+│       ├── services
+│       │   └── openaiService.js
+│       └── utils
+│           └── token.js
+├── frontend
+│   ├── package.json
+│   ├── index.html
+│   ├── postcss.config.js
+│   ├── tailwind.config.js
+│   ├── vite.config.js
+│   └── src
+│       ├── main.jsx
+│       ├── components
+│       │   ├── AuthPanel.jsx
+│       │   ├── ChatComposer.jsx
+│       │   ├── MessageItem.jsx
+│       │   └── Sidebar.jsx
+│       ├── hooks
+│       │   └── useTheme.js
+│       ├── lib
+│       │   └── api.js
+│       ├── pages
+│       │   ├── App.jsx
+│       │   └── SettingsPage.jsx
+│       └── styles
+│           └── tailwind.css
+├── .env.example
+├── package.json
+└── README.md
 ```
 
-Open:
+## Features
 
-- `http://localhost:8000/index.html`
+- Sign up / sign in with JWT auth
+- Google sign-in endpoint support
+- Conversation CRUD (create, rename, delete)
+- Streaming assistant responses via SSE
+- Full chat history in MongoDB
+- Markdown + syntax-highlighted code blocks
+- Copy message button
+- Regenerate response
+- Typing indicator
+- Dark/light mode toggle
+- Conversation sharing token
+- Export conversation as JSON or Markdown
+- Settings modal scaffold
 
-## Enable ChatGPT responses in JackGPT
+## Tech stack
 
-1. Open JackGPT in your browser.
-2. In the sidebar, paste your OpenAI API key (`sk-...`).
-3. Click **Save key**.
-4. Ask questions — replies will come from ChatGPT, branded as JackGPT.
+- **Frontend**: React (Vite), Tailwind CSS
+- **Backend**: Node.js, Express, OpenAI API
+- **Database**: MongoDB + Mongoose
+- **Auth**: JWT + Google OAuth token verification
 
-## Install as app
+## Setup
 
-1. Open in a Chromium-based browser.
-2. Click **Install app** when shown.
-3. Or use browser menu → **Install app**.
+1. Copy env file and configure values:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   npm install
+   npm install --workspace backend
+   npm install --workspace frontend
+   ```
+
+3. Run MongoDB locally (or set `MONGO_URI` to your hosted cluster).
+
+4. Start backend and frontend:
+
+   ```bash
+   npm run dev
+   ```
+
+5. Open frontend at `http://localhost:5173`.
+
+## API overview
+
+- `POST /api/auth/signup`
+- `POST /api/auth/signin`
+- `POST /api/auth/google`
+- `GET /api/auth/me`
+- `GET /api/conversations`
+- `POST /api/conversations`
+- `PATCH /api/conversations/:id`
+- `DELETE /api/conversations/:id`
+- `GET /api/conversations/:id/messages`
+- `PATCH /api/conversations/:id/messages/:messageId`
+- `POST /api/conversations/:id/messages/stream` (SSE)
+- `POST /api/conversations/:id/regenerate`
+- `POST /api/conversations/:id/share`
+- `GET /api/conversations/:id/export?format=json|md`
+
+## Production notes
+
+- Replace default JWT secret and enforce strong env secrets.
+- Add refresh-token rotation + secure HTTP-only cookies for hardened auth.
+- Add automated tests (unit/integration/e2e) and CI pipelines.
+- Add centralized logging and monitoring (OpenTelemetry, Sentry, etc.).
+- Use object storage for chat exports and rate limits backed by Redis in multi-instance deployments.
