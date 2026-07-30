@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
+import { TextInput } from './TextInput';
 
 export function AuthPanel({ onAuth }) {
   const [mode, setMode] = useState('signin');
@@ -19,15 +20,10 @@ export function AuthPanel({ onAuth }) {
       </div>
       <form className="space-y-3" onSubmit={submit}>
         {mode === 'signup' && (
-          <input
-            className="w-full rounded bg-slate-800 p-2"
-            placeholder="Name"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          />
+          <TextInput placeholder="Name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         )}
-        <input className="w-full rounded bg-slate-800 p-2" placeholder="Email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
-        <input className="w-full rounded bg-slate-800 p-2" placeholder="Password" type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+        <TextInput placeholder="Email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+        <TextInput placeholder="Password" type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
         <button className="w-full rounded bg-emerald-500 p-2 font-semibold text-black" type="submit">Continue</button>
       </form>
       <div className="mt-4 text-xs text-slate-400">Or continue with Google</div>

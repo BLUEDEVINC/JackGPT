@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Moon, RefreshCw, Share2, Sun } from 'lucide-react';
-import api from '../lib/api';
+import api, { apiFetch, getAuthToken, setAuthToken } from '../lib/api';
 import { useTheme } from '../hooks/useTheme';
 import { AuthPanel } from '../components/AuthPanel';
 import { Sidebar } from '../components/Sidebar';
@@ -9,7 +9,7 @@ import { ChatComposer } from '../components/ChatComposer';
 import { SettingsPage } from './SettingsPage';
 
 export function App() {
-  const [token, setToken] = useState(() => localStorage.getItem('auth_token'));
+  const [token, setToken] = useState(() => getAuthToken());
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [currentId, setCurrentId] = useState('');
@@ -44,7 +44,7 @@ export function App() {
   const onAuth = async (mode, payload) => {
     const path = mode === 'signup' ? '/auth/signup' : mode === 'signin' ? '/auth/signin' : '/auth/google';
     const { data } = await api.post(path, payload);
-    localStorage.setItem('auth_token', data.token);
+    setAuthToken(data.token);
     setToken(data.token);
   };
 
@@ -76,12 +76,9 @@ export function App() {
     const aiMessage = { role: 'assistant', content: '', _id: `tmp-ai-${Date.now()}` };
     setMessages((prev) => [...prev, userMessage, aiMessage]);
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/conversations/${convId}/messages/stream`, {
+    const response = await apiFetch(`/conversations/${convId}/messages/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content })
     });
 
@@ -129,9 +126,7 @@ export function App() {
   };
 
   const exportCurrent = async (format) => {
-    const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/conversations/${currentId}/export?format=${format}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
-    });
+    const res = await apiFetch(`/conversations/${currentId}/export?format=${format}`);
     const text = await res.text();
     const blob = new Blob([text], { type: format === 'md' ? 'text/markdown' : 'application/json' });
     const url = URL.createObjectURL(blob);

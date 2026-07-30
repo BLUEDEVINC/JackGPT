@@ -2,6 +2,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { Conversation } from '../models/Conversation.js';
 import { Message } from '../models/Message.js';
 import { streamChatCompletion } from '../services/openaiService.js';
+import { badRequest, notFound } from '../utils/http.js';
+import {
+  conversationScope,
+  findConversationMessages,
+  findOwnedConversation,
+  messageScope
+} from '../utils/scope.js';
+import { sendSseEvent, startSseStream } from '../utils/sse.js';
 
 const CONTEXT_LIMIT = 20;
 
@@ -17,68 +25,68 @@ export async function createConversation(req, res) {
 
 export async function renameConversation(req, res) {
   const conversation = await Conversation.findOneAndUpdate(
-    { _id: req.params.id, userId: req.user.id },
+    conversationScope(req),
     { title: req.body.title || 'Untitled conversation' },
     { new: true }
   );
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  if (!conversation) return notFound(res, 'Conversation');
   res.json({ conversation });
 }
 
 export async function deleteConversation(req, res) {
-  const conversation = await Conversation.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await Conversation.findOneAndDelete(conversationScope(req));
+  if (!conversation) return notFound(res, 'Conversation');
 
-  await Message.deleteMany({ conversationId: req.params.id, userId: req.user.id });
+  await Message.deleteMany(messageScope(req));
   res.status(204).send();
 }
 
 export async function shareConversation(req, res) {
   const conversation = await Conversation.findOneAndUpdate(
-    { _id: req.params.id, userId: req.user.id },
+    conversationScope(req),
     { sharedToken: uuidv4() },
     { new: true }
   );
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  if (!conversation) return notFound(res, 'Conversation');
   res.json({ sharedToken: conversation.sharedToken });
 }
 
 export async function getConversationMessages(req, res) {
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
 
-  const messages = await Message.find({ conversationId: req.params.id, userId: req.user.id }).sort({ createdAt: 1 });
+  const messages = await findConversationMessages(req);
   res.json({ messages });
 }
 
 export async function editMessage(req, res) {
   const message = await Message.findOneAndUpdate(
-    { _id: req.params.messageId, conversationId: req.params.id, userId: req.user.id, role: 'user' },
+    { _id: req.params.messageId, ...messageScope(req), role: 'user' },
     { content: req.body.content, edited: true },
     { new: true }
   );
-  if (!message) return res.status(404).json({ error: 'Message not found' });
+  if (!message) return notFound(res, 'Message');
   res.json({ message });
 }
 
 export async function regenerateResponse(req, res) {
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
 
-  const messages = await Message.find({ conversationId: req.params.id, userId: req.user.id }).sort({ createdAt: 1 });
+  const messages = await findConversationMessages(req);
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-  if (!lastUser) return res.status(400).json({ error: 'No user message to regenerate' });
+  if (!lastUser) return badRequest(res, 'No user message to regenerate');
 
-  await Message.deleteOne({ conversationId: req.params.id, userId: req.user.id, role: 'assistant' }).sort({ createdAt: -1 });
+  await Message.deleteOne({ ...messageScope(req), role: 'assistant' }).sort({ createdAt: -1 });
   res.json({ status: 'ready', messageId: lastUser.id });
 }
 
 export async function exportConversation(req, res) {
   const { format = 'json' } = req.query;
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
 
-  const messages = await Message.find({ conversationId: req.params.id, userId: req.user.id }).sort({ createdAt: 1 }).lean();
+  const messages = await findConversationMessages(req, { lean: true });
 
   if (format === 'md') {
     const markdown = messages.map((m) => `## ${m.role}\n\n${m.content}`).join('\n\n');
@@ -91,9 +99,9 @@ export async function exportConversation(req, res) {
 
 export async function streamMessage(req, res) {
   const { content } = req.body;
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
-  if (!content?.trim()) return res.status(400).json({ error: 'Message content required' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
+  if (!content?.trim()) return badRequest(res, 'Message content required');
 
   await Message.create({
     conversationId: conversation.id,
@@ -112,16 +120,14 @@ export async function streamMessage(req, res) {
     ...recent.reverse().map((m) => ({ role: m.role, content: m.content }))
   ];
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  startSseStream(res);
 
   let assistantText = '';
   const fullText = await streamChatCompletion({
     messages: modelMessages,
     onToken: (token) => {
       assistantText += token;
-      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+      sendSseEvent(res, { token });
     }
   });
 
@@ -141,6 +147,6 @@ export async function streamMessage(req, res) {
     await conversation.save();
   }
 
-  res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+  sendSseEvent(res, { done: true });
   res.end();
 }
