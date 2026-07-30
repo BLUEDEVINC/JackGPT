@@ -122,13 +122,9 @@ export async function streamMessage(req, res) {
 
   startSseStream(res);
 
-  let assistantText = '';
   const fullText = await streamChatCompletion({
     messages: modelMessages,
-    onToken: (token) => {
-      assistantText += token;
-      sendSseEvent(res, { token });
-    }
+    onToken: (token) => sendSseEvent(res, { token })
   });
 
   await Message.create({
