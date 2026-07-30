@@ -6,25 +6,25 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "lint": "eslint src --ext .js"
+    "lint": "eslint src"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "express": "^4.22.2",
     "express-rate-limit": "^7.3.1",
-    "google-auth-library": "^9.11.0",
+    "google-auth-library": "^10.9.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.4.1",
-    "morgan": "^1.10.0",
+    "mongoose": "^8.24.1",
+    "morgan": "^1.11.0",
     "openai": "^4.52.0",
-    "uuid": "^10.0.0"
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
-    "eslint": "^9.6.0",
+    "eslint": "^10.6.0",
     "nodemon": "^3.1.4"
   }
 }

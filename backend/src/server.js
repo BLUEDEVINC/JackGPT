@@ -11,19 +11,39 @@ import { requireAuth } from './middleware/auth.js';
 
 const app = express();
 
+const allowedOrigins = config.clientUrl
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors({ origin: config.clientUrl }));
-app.use(express.json({ limit: '1mb' }));
-app.use(morgan('dev'));
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300 }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      const err = new Error('Origin not allowed');
+      err.status = 403;
+      return callback(err);
+    },
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+);
+app.use(express.json({ limit: '100kb' }));
+app.use(morgan(config.isProduction ? 'combined' : 'dev'));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/conversations', requireAuth, conversationRoutes);
 
+app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+
 app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
+  const status = Number(err?.status) || 500;
+  if (status >= 500) console.error(err);
+  res.status(status).json({ error: status >= 500 ? 'Internal server error' : err.message });
 });
 
 connectDb()
