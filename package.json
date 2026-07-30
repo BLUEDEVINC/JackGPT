@@ -11,7 +11,9 @@
     "dev:backend": "npm run dev -w backend",
     "dev:frontend": "npm run dev -w frontend",
     "build": "npm run build -w frontend",
-    "test": "npm run test -w backend",
-    "test:coverage": "npm run test:coverage -w backend"
+    "test": "npm run test -w backend && npm run test -w frontend",
+    "test:backend": "npm run test -w backend",
+    "test:frontend": "npm run test -w frontend",
+    "test:coverage": "npm run test:coverage -w backend && npm run test:coverage -w frontend"
   }
 }
