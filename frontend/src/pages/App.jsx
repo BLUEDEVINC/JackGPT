@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Moon, RefreshCw, Share2, Sun } from 'lucide-react';
-import api, { API_URL, clearAuthToken, errorMessage, onUnauthorized } from '../lib/api';
+import api, { apiFetch, clearAuthToken, errorMessage, getAuthToken, onUnauthorized, setAuthToken } from '../lib/api';
 import { useTheme } from '../hooks/useTheme';
 import { AuthPanel } from '../components/AuthPanel';
 import { Sidebar } from '../components/Sidebar';
@@ -9,7 +9,7 @@ import { ChatComposer } from '../components/ChatComposer';
 import { SettingsPage } from './SettingsPage';
 
 export function App() {
-  const [token, setToken] = useState(() => localStorage.getItem('auth_token'));
+  const [token, setToken] = useState(() => getAuthToken());
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [currentId, setCurrentId] = useState('');
@@ -76,7 +76,7 @@ export function App() {
   const onAuth = async (mode, payload) => {
     const path = mode === 'signup' ? '/auth/signup' : mode === 'signin' ? '/auth/signin' : '/auth/google';
     const { data } = await api.post(path, payload);
-    localStorage.setItem('auth_token', data.token);
+    setAuthToken(data.token);
     setError('');
     setToken(data.token);
   };
@@ -132,12 +132,9 @@ export function App() {
         return copy;
       });
 
-    const response = await fetch(`${API_URL}/conversations/${convId}/messages/stream`, {
+    const response = await apiFetch(`/conversations/${convId}/messages/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content })
     });
 
@@ -231,9 +228,7 @@ export function App() {
     if (!currentId) return;
     let url;
     try {
-      const res = await fetch(`${API_URL}/conversations/${currentId}/export?format=${format}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
-      });
+      const res = await apiFetch(`/conversations/${currentId}/export?format=${format}`);
       if (!res.ok) throw new Error(`Export failed (${res.status})`);
       const blob = await res.blob();
       url = URL.createObjectURL(blob);

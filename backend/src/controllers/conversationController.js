@@ -2,6 +2,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { Conversation } from '../models/Conversation.js';
 import { Message } from '../models/Message.js';
 import { streamChatCompletion } from '../services/openaiService.js';
+import { badRequest, notFound, sendError } from '../utils/http.js';
+import {
+  conversationScope,
+  findConversationMessages,
+  findOwnedConversation,
+  messageScope
+} from '../utils/scope.js';
+import { sendSseEvent, startSseStream } from '../utils/sse.js';
 
 const CONTEXT_LIMIT = 20;
 const MAX_MESSAGE_LENGTH = 32000;
@@ -18,36 +26,36 @@ export async function createConversation(req, res) {
 
 export async function renameConversation(req, res) {
   const conversation = await Conversation.findOneAndUpdate(
-    { _id: req.params.id, userId: req.user.id },
+    conversationScope(req),
     { title: req.body.title || 'Untitled conversation' },
     { new: true }
   );
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  if (!conversation) return notFound(res, 'Conversation');
   res.json({ conversation });
 }
 
 export async function deleteConversation(req, res) {
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
 
-  await Message.deleteMany({ conversationId: conversation.id, userId: req.user.id });
+  await Message.deleteMany(messageScope(req));
   await conversation.deleteOne();
   res.status(204).send();
 }
 
 export async function shareConversation(req, res) {
   const conversation = await Conversation.findOneAndUpdate(
-    { _id: req.params.id, userId: req.user.id },
+    conversationScope(req),
     { sharedToken: uuidv4() },
     { new: true }
   );
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  if (!conversation) return notFound(res, 'Conversation');
   res.json({ sharedToken: conversation.sharedToken });
 }
 
 export async function getSharedConversation(req, res) {
   const conversation = await Conversation.findOne({ sharedToken: req.params.token }).lean();
-  if (!conversation) return res.status(404).json({ error: 'Shared conversation not found' });
+  if (!conversation) return notFound(res, 'Shared conversation');
 
   const messages = await Message.find({ conversationId: conversation._id, role: { $ne: 'system' } })
     .sort({ createdAt: 1 })
@@ -58,45 +66,42 @@ export async function getSharedConversation(req, res) {
 }
 
 export async function getConversationMessages(req, res) {
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
 
-  const messages = await Message.find({ conversationId: req.params.id, userId: req.user.id }).sort({ createdAt: 1 });
+  const messages = await findConversationMessages(req);
   res.json({ messages });
 }
 
 export async function editMessage(req, res) {
   const message = await Message.findOneAndUpdate(
-    { _id: req.params.messageId, conversationId: req.params.id, userId: req.user.id, role: 'user' },
+    { _id: req.params.messageId, ...messageScope(req), role: 'user' },
     { content: req.body.content, edited: true },
     { new: true }
   );
-  if (!message) return res.status(404).json({ error: 'Message not found' });
+  if (!message) return notFound(res, 'Message');
   res.json({ message });
 }
 
 export async function regenerateResponse(req, res) {
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
 
-  const messages = await Message.find({ conversationId: req.params.id, userId: req.user.id }).sort({ createdAt: 1 });
+  const messages = await findConversationMessages(req);
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-  if (!lastUser) return res.status(400).json({ error: 'No user message to regenerate' });
+  if (!lastUser) return badRequest(res, 'No user message to regenerate');
 
-  await Message.findOneAndDelete({ conversationId: req.params.id, userId: req.user.id, role: 'assistant' }).sort({
-    createdAt: -1
-  });
+  await Message.findOneAndDelete({ ...messageScope(req), role: 'assistant' }).sort({ createdAt: -1 });
   res.json({ status: 'ready', messageId: lastUser.id, content: lastUser.content });
 }
 
 export async function exportConversation(req, res) {
   const { format = 'json' } = req.query;
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
 
-  const messages = await Message.find({ conversationId: req.params.id, userId: req.user.id }).sort({ createdAt: 1 }).lean();
-
-  const filename = `${(conversation.title || 'conversation').replace(/[^\w.-]+/g, '_').slice(0, 80)}`;
+  const messages = await findConversationMessages(req, { lean: true });
+  const filename = (conversation.title || 'conversation').replace(/[^\w.-]+/g, '_').slice(0, 80);
 
   if (format === 'md') {
     const markdown = messages.map((m) => `## ${m.role}\n\n${m.content}`).join('\n\n');
@@ -105,17 +110,16 @@ export async function exportConversation(req, res) {
   }
 
   res.attachment(`${filename}.json`);
-
   res.json({ conversation, messages });
 }
 
 export async function streamMessage(req, res) {
   const { content } = req.body;
-  if (!content?.trim()) return res.status(400).json({ error: 'Message content required' });
-  if (content.length > MAX_MESSAGE_LENGTH) return res.status(413).json({ error: 'Message too long' });
+  if (!content?.trim()) return badRequest(res, 'Message content required');
+  if (content.length > MAX_MESSAGE_LENGTH) return sendError(res, 413, 'Message too long');
 
-  const conversation = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
-  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await findOwnedConversation(req);
+  if (!conversation) return notFound(res, 'Conversation');
 
   await Message.create({
     conversationId: conversation.id,
@@ -134,11 +138,7 @@ export async function streamMessage(req, res) {
     ...recent.reverse().map((m) => ({ role: m.role, content: m.content }))
   ];
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
+  startSseStream(res);
 
   const abortController = new AbortController();
   res.on('close', () => abortController.abort());
@@ -150,9 +150,7 @@ export async function streamMessage(req, res) {
     assistantText = await streamChatCompletion({
       messages: modelMessages,
       signal: abortController.signal,
-      onToken: (token) => {
-        res.write(`data: ${JSON.stringify({ token })}\n\n`);
-      }
+      onToken: (token) => sendSseEvent(res, { token })
     });
   } catch (err) {
     streamError = err;
@@ -177,8 +175,8 @@ export async function streamMessage(req, res) {
   if (abortController.signal.aborted) return;
 
   if (streamError) {
-    res.write(`data: ${JSON.stringify({ error: 'Failed to generate a response. Please try again.' })}\n\n`);
+    sendSseEvent(res, { error: 'Failed to generate a response. Please try again.' });
   }
-  res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+  sendSseEvent(res, { done: true });
   res.end();
 }

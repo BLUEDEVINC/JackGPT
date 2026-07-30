@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { errorMessage } from '../lib/api';
+import { TextInput } from './TextInput';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -48,16 +49,14 @@ export function AuthPanel({ onAuth }) {
       </div>
       <form className="space-y-3" onSubmit={submit}>
         {mode === 'signup' && (
-          <input
-            className="w-full rounded bg-surface p-2"
+          <TextInput
             placeholder="Name"
             required
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
         )}
-        <input
-          className="w-full rounded bg-surface p-2"
+        <TextInput
           placeholder="Email"
           type="email"
           autoComplete="email"
@@ -65,8 +64,7 @@ export function AuthPanel({ onAuth }) {
           value={form.email}
           onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
         />
-        <input
-          className="w-full rounded bg-surface p-2"
+        <TextInput
           placeholder="Password"
           type="password"
           autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}

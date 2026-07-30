@@ -1,12 +1,13 @@
 import mongoose from 'mongoose';
+import { objectIdRef } from './fields.js';
 
 const messageSchema = new mongoose.Schema(
   {
-    conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', index: true, required: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true, required: true },
+    conversationId: objectIdRef('Conversation', { required: true }),
+    userId: objectIdRef('User', { required: true }),
     role: { type: String, enum: ['system', 'user', 'assistant'], required: true },
     content: { type: String, required: true },
-    regeneratedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
+    regeneratedFrom: objectIdRef('Message'),
     edited: { type: Boolean, default: false }
   },
   { timestamps: true }
