@@ -4,7 +4,8 @@ import { config } from '../config.js';
 import { User } from '../models/User.js';
 import { signAuthToken } from '../utils/token.js';
 import { badRequest, sendError, unauthorized } from '../utils/http.js';
-import { normalizeEmail, publicUser } from '../utils/presenters.js';
+import { publicUser } from '../utils/presenters.js';
+import { requireEmail, requirePassword, requireString } from '../utils/validate.js';
 
 const googleClient = config.googleClientId ? new OAuth2Client(config.googleClientId) : null;
 
@@ -13,21 +14,24 @@ function sendAuthResponse(res, user, status = 200) {
 }
 
 export async function signup(req, res) {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) return badRequest(res, 'Missing required fields');
+  const name = requireString(req.body?.name, 'name', { max: 80 });
+  const email = requireEmail(req.body?.email);
+  const password = requirePassword(req.body?.password);
 
-  const existing = await User.findOne({ email: normalizeEmail(email) });
+  const existing = await User.findOne({ email });
   if (existing) return sendError(res, 409, 'Email already registered');
 
   const passwordHash = await bcrypt.hash(password, 12);
-  const user = await User.create({ name, email: normalizeEmail(email), passwordHash, authProvider: 'local' });
+  const user = await User.create({ name, email, passwordHash, authProvider: 'local' });
 
   sendAuthResponse(res, user, 201);
 }
 
 export async function signin(req, res) {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email: normalizeEmail(email) });
+  const email = requireEmail(req.body?.email);
+  const password = requirePassword(req.body?.password);
+
+  const user = await User.findOne({ email });
   if (!user?.passwordHash) return unauthorized(res, 'Invalid credentials');
 
   const match = await bcrypt.compare(password, user.passwordHash);
@@ -38,17 +42,20 @@ export async function signin(req, res) {
 
 export async function googleSignIn(req, res) {
   if (!googleClient) return badRequest(res, 'Google auth not configured');
-  const { idToken } = req.body;
-  if (!idToken) return badRequest(res, 'Missing idToken');
+  const idToken = requireString(req.body?.idToken, 'idToken', { max: 4096 });
 
   const ticket = await googleClient.verifyIdToken({ idToken, audience: config.googleClientId });
   const payload = ticket.getPayload();
+  if (!payload?.email || payload.email_verified !== true) {
+    return unauthorized(res, 'Google account email is not verified');
+  }
 
-  let user = await User.findOne({ email: normalizeEmail(payload.email) });
+  const email = payload.email.toLowerCase();
+  let user = await User.findOne({ email });
   if (!user) {
     user = await User.create({
-      name: payload.name,
-      email: normalizeEmail(payload.email),
+      name: payload.name || email,
+      email,
       avatarUrl: payload.picture,
       authProvider: 'google'
     });

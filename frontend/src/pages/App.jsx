@@ -52,6 +52,7 @@ export function App() {
     const { data } = await api.post('/conversations', { title: 'New conversation' });
     setConversations((prev) => [data.conversation, ...prev]);
     setCurrentId(data.conversation._id);
+    return data.conversation._id;
   };
 
   const renameConversation = async (conv) => {
@@ -68,8 +69,7 @@ export function App() {
   };
 
   const sendMessage = async (content) => {
-    if (!currentId) await createConversation();
-    const convId = currentId || conversations[0]?._id;
+    const convId = currentId || (await createConversation());
     setLoading(true);
 
     const userMessage = { role: 'user', content, _id: `tmp-user-${Date.now()}` };
@@ -81,6 +81,14 @@ export function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content })
     });
+
+    if (!response.ok) {
+      const { error } = await response.json().catch(() => ({}));
+      setMessages((prev) => prev.slice(0, -2));
+      setLoading(false);
+      alert(error || 'Failed to send message');
+      return;
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();

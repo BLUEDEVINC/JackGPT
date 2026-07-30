@@ -10,8 +10,11 @@ import {
   messageScope
 } from '../utils/scope.js';
 import { sendSseEvent, startSseStream } from '../utils/sse.js';
+import { optionalString, requireObjectId, requireString } from '../utils/validate.js';
 
 const CONTEXT_LIMIT = 20;
+const TITLE_MAX = 200;
+const MESSAGE_MAX = 20000;
 
 export async function listConversations(req, res) {
   const items = await Conversation.find({ userId: req.user.id }).sort({ updatedAt: -1 }).lean();
@@ -19,21 +22,23 @@ export async function listConversations(req, res) {
 }
 
 export async function createConversation(req, res) {
-  const conversation = await Conversation.create({ userId: req.user.id, title: req.body.title || 'New conversation' });
+  const title = optionalString(req.body?.title, 'title', { max: TITLE_MAX }) || 'New conversation';
+  const conversation = await Conversation.create({ userId: req.user.id, title });
   res.status(201).json({ conversation });
 }
 
 export async function renameConversation(req, res) {
-  const conversation = await Conversation.findOneAndUpdate(
-    conversationScope(req),
-    { title: req.body.title || 'Untitled conversation' },
-    { new: true }
-  );
+  requireObjectId(req.params.id, 'conversation id');
+  const title = optionalString(req.body?.title, 'title', { max: TITLE_MAX }) || 'Untitled conversation';
+
+  const conversation = await Conversation.findOneAndUpdate(conversationScope(req), { title }, { new: true });
   if (!conversation) return notFound(res, 'Conversation');
   res.json({ conversation });
 }
 
 export async function deleteConversation(req, res) {
+  requireObjectId(req.params.id, 'conversation id');
+
   const conversation = await Conversation.findOneAndDelete(conversationScope(req));
   if (!conversation) return notFound(res, 'Conversation');
 
@@ -42,6 +47,8 @@ export async function deleteConversation(req, res) {
 }
 
 export async function shareConversation(req, res) {
+  requireObjectId(req.params.id, 'conversation id');
+
   const conversation = await Conversation.findOneAndUpdate(
     conversationScope(req),
     { sharedToken: uuidv4() },
@@ -52,6 +59,8 @@ export async function shareConversation(req, res) {
 }
 
 export async function getConversationMessages(req, res) {
+  requireObjectId(req.params.id, 'conversation id');
+
   const conversation = await findOwnedConversation(req);
   if (!conversation) return notFound(res, 'Conversation');
 
@@ -60,9 +69,13 @@ export async function getConversationMessages(req, res) {
 }
 
 export async function editMessage(req, res) {
+  requireObjectId(req.params.id, 'conversation id');
+  const messageId = requireObjectId(req.params.messageId, 'message id');
+  const content = requireString(req.body?.content, 'content', { max: MESSAGE_MAX });
+
   const message = await Message.findOneAndUpdate(
-    { _id: req.params.messageId, ...messageScope(req), role: 'user' },
-    { content: req.body.content, edited: true },
+    { _id: messageId, ...messageScope(req), role: 'user' },
+    { content, edited: true },
     { new: true }
   );
   if (!message) return notFound(res, 'Message');
@@ -70,6 +83,8 @@ export async function editMessage(req, res) {
 }
 
 export async function regenerateResponse(req, res) {
+  requireObjectId(req.params.id, 'conversation id');
+
   const conversation = await findOwnedConversation(req);
   if (!conversation) return notFound(res, 'Conversation');
 
@@ -82,7 +97,9 @@ export async function regenerateResponse(req, res) {
 }
 
 export async function exportConversation(req, res) {
-  const { format = 'json' } = req.query;
+  requireObjectId(req.params.id, 'conversation id');
+  const format = req.query.format === 'md' ? 'md' : 'json';
+
   const conversation = await findOwnedConversation(req);
   if (!conversation) return notFound(res, 'Conversation');
 
@@ -98,16 +115,17 @@ export async function exportConversation(req, res) {
 }
 
 export async function streamMessage(req, res) {
-  const { content } = req.body;
+  requireObjectId(req.params.id, 'conversation id');
+  const content = requireString(req.body?.content, 'content', { max: MESSAGE_MAX });
+
   const conversation = await findOwnedConversation(req);
   if (!conversation) return notFound(res, 'Conversation');
-  if (!content?.trim()) return badRequest(res, 'Message content required');
 
   await Message.create({
     conversationId: conversation.id,
     userId: req.user.id,
     role: 'user',
-    content: content.trim()
+    content
   });
 
   const recent = await Message.find({ conversationId: conversation.id, userId: req.user.id })
@@ -122,11 +140,9 @@ export async function streamMessage(req, res) {
 
   startSseStream(res);
 
-  let assistantText = '';
   const fullText = await streamChatCompletion({
     messages: modelMessages,
     onToken: (token) => {
-      assistantText += token;
       sendSseEvent(res, { token });
     }
   });
