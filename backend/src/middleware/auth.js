@@ -16,7 +16,10 @@ export async function requireAuth(req, res, next) {
     if (!user) return res.status(401).json({ error: 'Invalid user' });
     req.user = user;
     next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
+  } catch (err) {
+    if (err?.name === 'JsonWebTokenError' || err?.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    return next(err);
   }
 }

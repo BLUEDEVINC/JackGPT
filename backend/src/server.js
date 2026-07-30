@@ -7,10 +7,12 @@ import { config } from './config.js';
 import { connectDb } from './db.js';
 import authRoutes from './routes/authRoutes.js';
 import conversationRoutes from './routes/conversationRoutes.js';
+import sharedRoutes from './routes/sharedRoutes.js';
 import { requireAuth } from './middleware/auth.js';
 
 const app = express();
 
+app.set('trust proxy', config.trustProxy);
 app.use(helmet());
 app.use(cors({ origin: config.clientUrl }));
 app.use(express.json({ limit: '1mb' }));
@@ -19,10 +21,15 @@ app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300 }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
+app.use('/api/shared', sharedRoutes);
 app.use('/api/conversations', requireAuth, conversationRoutes);
 
-app.use((err, _req, res, _next) => {
+app.use((err, _req, res, next) => {
   console.error(err);
+  if (res.headersSent) return next(err);
+  if (err?.name === 'CastError' || err?.name === 'ValidationError') {
+    return res.status(400).json({ error: 'Invalid request' });
+  }
   res.status(500).json({ error: 'Internal server error' });
 });
 
