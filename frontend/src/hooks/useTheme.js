@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { getStoredItem, setStoredItem } from '../lib/storage';
 
 export function useTheme() {
-  const [dark, setDark] = useState(() => localStorage.getItem('theme') !== 'light');
+  const [dark, setDark] = useState(() => getStoredItem('theme') !== 'light');
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    setStoredItem('theme', dark ? 'dark' : 'light');
   }, [dark]);
 
   return { dark, setDark };
