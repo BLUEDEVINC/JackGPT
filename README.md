@@ -94,7 +94,11 @@ A production-minded full-stack AI chat web app inspired by ChatGPT, with authent
    npm install --workspace frontend
    ```
 
-3. Run MongoDB locally (or set `MONGO_URI` to your hosted cluster).
+3. Run MongoDB locally (or set `MONGO_URI` to your hosted cluster). The backend exits if it cannot connect.
+
+   ```bash
+   docker run -d --name chatgpt-clone-mongo -p 27017:27017 mongo:7
+   ```
 
 4. Start backend and frontend:
 
@@ -120,10 +124,12 @@ A production-minded full-stack AI chat web app inspired by ChatGPT, with authent
 - `POST /api/conversations/:id/regenerate`
 - `POST /api/conversations/:id/share`
 - `GET /api/conversations/:id/export?format=json|md`
+- `GET /api/shared/:token` (public, read-only view of a shared conversation)
 
 ## Production notes
 
 - Replace default JWT secret and enforce strong env secrets.
+- Set `TRUST_PROXY` to the number of proxy hops in front of the app, otherwise rate limiting buckets every client into a single IP.
 - Add refresh-token rotation + secure HTTP-only cookies for hardened auth.
 - Add automated tests (unit/integration/e2e) and CI pipelines.
 - Add centralized logging and monitoring (OpenTelemetry, Sentry, etc.).

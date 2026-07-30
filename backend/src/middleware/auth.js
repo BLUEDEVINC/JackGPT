@@ -17,7 +17,10 @@ export async function requireAuth(req, res, next) {
     if (!user) return unauthorized(res, 'Invalid user');
     req.user = user;
     next();
-  } catch {
-    return unauthorized(res, 'Invalid token');
+  } catch (err) {
+    if (err?.name === 'JsonWebTokenError' || err?.name === 'TokenExpiredError') {
+      return unauthorized(res, 'Invalid token');
+    }
+    return next(err);
   }
 }
